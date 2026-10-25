@@ -1,0 +1,122 @@
+# The application workspace
+
+One workspace per job, inside the job page of the dashboard (and the same facts on the command line). The
+homepage stays about finding jobs; the work of applying starts from a job.
+
+## The journey
+1. **Get application help** (one main action on the job page, named by its state). The page saves the request
+   in its own database at once and hands it to the running Hunter session immediately; the button reads
+   **Working…** and the card says *Preparing…*. Hunter records the request once, runs it, and writes the result
+   back; the same page updates and the button becomes **Review application** (or **Answer question**, **Review
+   changes**, and **View application** once applied). When Hunter cannot be reached the request is kept and the
+   page says *Hunter is offline* with **Retry**; there is no "next run" and no command to copy. The chips
+   **Research company**, **Write cover letter**, **Draft answers** and **Find contacts** work the same way
+   (Researching… → View research, Drafting… → Review cover letter, Finding contacts… → View contacts).
+2. **Review application**: the focused workspace holds, in order:
+   - the CV for this job (default preselected; Hunter may suggest another with one short reason; the choice is
+     for this job only; a changed default never changes a job that chose);
+   - the company and role brief: *The vacancy says* / *The company describes itself* / *Hunter's reading*, with
+     a **Sources** disclosure (URL, checked time, certainty) and the uncertainty line; **Refresh the brief**;
+   - the vacancy and where to apply: status, last checked, reference id, the employer's own listing when
+     confirmed, other listings; "no longer listed where Hunter found it" is never "closed";
+   - **Your strongest case**: three requirements, whether the profile supports each (and the kind of evidence),
+     whether the chosen CV says it in so many words, the gap, two or three examples to tell; no score;
+   - **Application answers**: Hunter's draft (facts only) with Copy, your wording with Save my wording, a
+     character count and the form's limit; paste the form's questions (`(500)` sets a limit); pay, visa, start
+     date and personal questions are never drafted;
+   - the optional short introduction (about 60 to 100 words) and cover letter (about 180 to 250), only on request,
+     with **Facts used**; a new draft never overwrites your version; versions are kept;
+   - **Before you send**: a checklist, not a gate; **Open application** is always available.
+3. **I applied**: the date and which CV you sent (the prepared one preselected, another CV, not sure). Hunter
+   records the exact version and a snapshot (vacancy, package version, your confirmed answers). Preparing,
+   copying and opening never count. **View application** from then on.
+4. After applying: **Remind me to follow up** (date, Snooze 3 days, Done, Stop; stops by itself on a reply,
+   interview, rejection or withdrawal; shown under Needs attention; in the email only by preference),
+   **Draft follow-up**, **Prepare for interview** (the InterviewOS hand-off).
+5. **People & notes**: **Find a contact** (Listed contact from the posting, Possible team contact from a public
+   page Hunter read, Your connection you named), with source and checked date, a public route only when
+   published, a short draft message, **I contacted them**; and the private notes.
+6. **My CVs** under Profile: label, tags, version, default, whether the file is on Hunter's computer; Make
+   default, Archive, rename; **Preview / download** asks Hunter for the original bytes (hash checked), which
+   Hunter hands over in Claude; a file that is not on that computer gets "Add this CV again".
+
+## The dashboard layout (2026-10-25 redesign)
+A dark navigation rail with four destinations (Today, Jobs, Applications, Profile; Settings opens the profile's
+settings section), the job list on the left and the selected job beside it on a desktop, full screen on a phone.
+Rows carry the employer's mark (its own favicon from a verified domain, otherwise initials), a short place and
+work-mode label, the posting age, the match badge and two to four role and tool tags; the role icon library
+(`jobhunter/services/roles.py`, twenty families) and the company mark are recognition aids with no influence on
+matching. The job detail has Favorite, Save and Close at the top, one primary action with Open application beside
+it, Job overview next to "Why this could be a good fit", the description folded, the application state and the
+notes. The application workspace is a focused view behind **Review application** (CV, strongest case, questions,
+optional extras with people, Ready to apply?). Company marks are fetched once by Hunter during a search from the
+employer's verified domain (`jobhunter/services/logos.py`, a small private copy in the page's `meta/logos`
+document); the browser never contacts an employer site, and a missing mark shows initials.
+
+## The page reaches Hunter
+Published-page action → the request is in the page's database (never lost) → the page sends the request id to
+the running Hunter at once → Hunter reads the actions (`board import`), runs it (`work run <id>`), writes the
+result (`board export`) → the same page updates (its `work` collection). The page is published with the `mcp`
+capability for the `Claude Code Remote` connector (`fire_trigger`, `send_message`); `/jobhunter` binds its own
+session at startup (`board channel session`), and a poke-only Routine can stand in (`board channel routine`).
+The page calls it as the viewer, with the viewer's own credentials. When the call is refused the page keeps the
+request and shows *Hunter is offline* with Retry; a later `/jobhunter` or any sync still finds it. The nightly
+run is a separate thing: it searches, refreshes the page and sends the digest, and never stands in for a click.
+Nothing is ever claimed as running when no worker is.
+
+## Today and automation modes
+The page opens with **Today**: Ready to review, Needs your answer, Follow-up due, Something changed, Needs
+attention, one action each, computed by Hunter (`jobhunter today`) and written as `meta/today`. Modes
+(`jobhunter automation mode`): **on request** (default), **prepare my best matches** (after a search, the best
+unprepared good matches are prepared through the same request chain as the page's button, at most 3 a day and 5
+unopened, one digest a day; nothing is submitted or sent), **assisted apply** (refused until the assisted lane
+exists). Opening a prepared application on the page writes `opened_at` into its action document; Hunter
+records it once, and the queue limit counts only unopened preparations. Each prepared application carries a
+readiness label: *Ready for review* (something open: form questions without your wording, a CV file not on this
+computer, no known place to apply, a change since) or *Ready to submit*. The label never gates anything.
+Earlier answers you wrote for another job are offered for the same question when they name no employer and have
+not expired (90 days for pay, notice and start answers; never for personal or legal ones), as a suggestion with
+its origin; nothing is filled in by itself.
+
+## Needs review
+A package is tied to the job text, the approved profile, the chosen CV version and the policy version. When any
+of those changes, the page says **Needs review** and names what changed; **Prepare again** makes a new version
+and keeps your wording.
+
+## What is stored where
+- Hunter's database: CV variants and versions (metadata; the originals in the data folder), applications with
+  the chosen CV, the recorded version and the snapshot, requests with their states, research versions, contacts,
+  follow-ups, packages with your answers.
+- The page's owner-only database: your edits (answers, texts, CV choice, I applied, contacts, follow-ups,
+  requests) in the job's action document, My CVs edits in `actions/_cvs`, and Hunter's `work/<key>` results.
+- The state file in your private repository: CV metadata (keys, labels, versions, hashes) and per-job CV state;
+  never files, text, notes, answers, drafts, research or contacts.
+
+## Intake and email updates
+`jobhunter intake` takes a link, a pasted description, a job-alert email, a recruiter message or a referral and
+makes the same vacancy record the hunt makes (board links carry the board's identity; the same job merges, a
+different one stays distinct; source differences stay as observations). Recruiters and referrers become contacts
+with their provenance; the message joins the timeline and the hand-off says how the job reached Hunter.
+`jobhunter email policy` decides what an email may change by itself (receipts only, by default); everything else
+is a suggestion on Today with confirm, dismiss and undo (`email review`, `email confirm|reject|unlink`).
+
+## Watches and change intelligence
+Every refresh compares what a source lists now with what Hunter stored (`job_changes`): pay, location, remote
+rule, title, posting text, closing date, contract type, availability, application link. A source that could not
+be checked records nothing. Changes on jobs the student follows show on Today and in the digest with the old and
+new value; `jobhunter watches` lists, acknowledges and adds company watches. Once a week Today carries one
+observation from the student's own records with a sample-size guard (no causal claims).
+
+## Assisted Apply
+See [assisted-apply.md](assisted-apply.md): the capability per site is shown on the job page under "The vacancy
+and where to apply"; the lane itself runs on the student's computer (`jobhunter assisted run`).
+
+## Known limits
+- The live line needs the `mcp` capability on the page (a republish, with the student's approval) and a bound
+  session or Routine in their account. Without it the page says *Hunter is offline* and keeps every request.
+- CV files are only on the computer where they were added. A cloud session cannot preview or download one; it
+  says so. The same file added again restores the same version (hash proven).
+- The rule-based brief reads the posting only. A richer brief with company sources comes from a Claude session
+  that really read the employer's pages (`work research --file`), validated by code.
+- Your answers and drafts live on your page and in each Hunter database that read them, not in Git. After a
+  restore into an empty database Hunter re-reads the page and keeps an answer until its package exists there.

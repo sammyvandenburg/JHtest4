@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% from "_job_card.html" import card %}
+{% block title %}{{ heading }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ heading }}</h1><p class="sub">{{ subheading }}</p></div>
+  {% if view == 'new' %}<form method="post" action="/do/hunt"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">{{ icon('search') }} Find jobs now</button></form>{% endif %}
+</div>
+<form method="get" class="filters" role="search">
+  <input type="search" name="q" value="{{ res.query or '' }}" placeholder="Search job title, company, or technology" aria-label="Search">
+  {% if view in ['new','old','all'] %}<select name="group" aria-label="Match"><option value="">All matches</option><option value="good" {% if res.group=='good' %}selected{% endif %}>Good match</option><option value="worth_a_shot" {% if res.group=='worth_a_shot' %}selected{% endif %}>Worth a shot</option><option value="backup" {% if res.group=='backup' %}selected{% endif %}>Backup</option></select>{% endif %}
+  <select name="remote" aria-label="Remote"><option value="">Any place</option><option value="remote" {% if res.filters.remote=='remote' %}selected{% endif %}>Remote</option><option value="hybrid" {% if res.filters.remote=='hybrid' %}selected{% endif %}>Hybrid</option><option value="onsite" {% if res.filters.remote=='onsite' %}selected{% endif %}>In office</option></select>
+  {% if view == 'new' %}<select name="age" aria-label="Posted"><option value="">Last 14 days</option><option value="2" {% if res.filters.age=='2' %}selected{% endif %}>Last 48 hours</option><option value="7" {% if res.filters.age=='7' %}selected{% endif %}>Last 7 days</option><option value="all" {% if res.filters.age=='all' %}selected{% endif %}>Any age</option></select>{% endif %}
+  <input type="text" name="country" value="{{ res.filters.country or '' }}" placeholder="Country (NL)" size="9" aria-label="Country code" maxlength="2">
+  <select name="sort" aria-label="Sort"><option value="best">Best match</option><option value="newest" {% if res.filters.sort=='newest' %}selected{% endif %}>Newest</option><option value="added" {% if res.filters.sort=='added' %}selected{% endif %}>Recently added</option></select>
+  {% if view not in ['favorites'] %}<label class="toggle"><input type="checkbox" name="fav" value="1" {% if res.filters.fav_only %}checked{% endif %}> {{ icon('star') }} Favorites only</label>{% endif %}
+  {% if view not in ['saved'] %}<label class="toggle"><input type="checkbox" name="savedonly" value="1" {% if res.filters.saved_only %}checked{% endif %}> {{ icon('bookmark') }} Saved only</label>{% endif %}
+  <button>Apply</button>
+  {% if res.query or res.group or res.filters.remote or res.filters.age or res.filters.country or res.filters.fav_only or res.filters.saved_only %}<a class="btn btn-ghost btn-sm" href="/jobs/{{ view }}">Clear</a>{% endif %}
+</form>
+<p class="muted small">{{ res.total }} job{{ '' if res.total == 1 else 's' }}{% if view == 'new' %} · best match first, newest highlighted{% endif %}{% if last_run and last_run.stats and last_run.stats.sources_failed %} · <a href="/health">{{ last_run.stats.sources_failed }} site(s) could not be checked</a>{% endif %}</p>
+{% if not res['items'] %}
+  {% if res.query or res.group or res.filters.remote or res.filters.age or res.filters.country or res.filters.fav_only or res.filters.saved_only %}
+  <div class="empty">{{ icon('search') }}<h2>No jobs match these filters</h2><p>Try fewer filters, or <a href="/jobs/{{ view }}">clear them</a>.</p></div>
+  {% else %}
+  <div class="empty">{{ icon(empty_icon) }}<h2>{{ empty_title }}</h2><p>{{ empty_text | safe }}</p></div>
+  {% endif %}
+{% else %}
+<ul class="jobs">{% for j in res['items'] %}{{ card(j, csrf) }}{% endfor %}</ul>
+{% endif %}
+{% if res.pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% if res.page > 1 %}<a class="btn btn-sm" href="?{{ qs }}&amp;page={{ res.page - 1 }}">Previous</a>{% endif %}
+  <span>Page {{ res.page }} of {{ res.pages }}</span>
+  {% if res.page < res.pages %}<a class="btn btn-sm" href="?{{ qs }}&amp;page={{ res.page + 1 }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% if view == 'new' %}
+<details class="more"><summary>More lists</summary>
+  <p><a href="/jobs/old">Older matches</a> · <a href="/jobs/excluded">Left out, and why</a> · <a href="/jobs/uncertain">Needs checking</a> · <a href="/jobs/dismissed">Not interested</a> · <a href="/jobs/closed">No longer listed</a> · <a href="/jobs/all">Everything found</a></p>
+</details>
+{% endif %}
+{% endblock %}
